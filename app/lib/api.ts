@@ -1,12 +1,10 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
 // Note: Tokens are now stored as httpOnly cookies by the server
 // No client-side token storage for security
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: '/api',
 });
 
 // Authentication helper functions
@@ -26,6 +24,38 @@ export async function logout() {
 
 export async function getCurrentUser() {
   const response = await axios.get('/api/auth/me');
+  return response.data;
+}
+
+// Password reset functions
+export async function requestPasswordReset(email: string) {
+  const response = await axios.post('/api/auth/request-password-reset', { email });
+  return response.data;
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  const response = await axios.post('/api/auth/reset-password', { token, newPassword });
+  return response.data;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const response = await axios.post('/api/auth/change-password', { currentPassword, newPassword });
+  return response.data;
+}
+
+// 2FA functions
+export async function setupTwoFactor() {
+  const response = await axios.post('/api/auth/2fa/setup');
+  return response.data;
+}
+
+export async function enableTwoFactor(token: string) {
+  const response = await axios.post('/api/auth/2fa/enable', { token });
+  return response.data;
+}
+
+export async function disableTwoFactor(token: string) {
+  const response = await axios.post('/api/auth/2fa/disable', { token });
   return response.data;
 }
 
@@ -64,8 +94,8 @@ api.interceptors.response.use(
 
       if (isRefreshing) {
         return new Promise((resolve) => {
-          subscribeTokenRefresh((newToken) => {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          subscribeTokenRefresh(() => {
+            delete originalRequest.headers.Authorization;
             resolve(api(originalRequest));
           });
         });
@@ -73,10 +103,10 @@ api.interceptors.response.use(
 
       isRefreshing = true;
       try {
-        const res = await axios.post('/api/auth/refresh');
-        // Tokens are now httpOnly cookies, no need to store them
-        notifyRefreshSubscribers('token-refreshed');
-        originalRequest.headers.Authorization = `Bearer token-refreshed`;
+        await axios.post('/api/auth/refresh');
+        // Tokens are httpOnly cookies — browser sends them automatically
+        notifyRefreshSubscribers('');
+        delete originalRequest.headers.Authorization;
         return api(originalRequest);
       } catch {
         if (typeof window !== 'undefined') window.location.href = '/login';

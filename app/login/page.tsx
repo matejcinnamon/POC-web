@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { login } from '../lib/api';
 
 export default function Login() {
@@ -15,8 +16,10 @@ export default function Login() {
     // Check if user is already authenticated by calling /api/auth/me
     const checkAuth = async () => {
       try {
-        await fetch('/api/auth/me');
-        router.replace('/dashboard');
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          router.replace('/dashboard');
+        }
       } catch {
         // Not authenticated, stay on login page
       }
@@ -107,7 +110,23 @@ export default function Login() {
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', fontSize: '0.8125rem', color: '#9E887A', marginTop: '1.5rem' }}>
+          <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+            <Link
+              href="/forgot-password"
+              style={{
+                display: 'inline-block',
+                fontSize: '0.875rem',
+                color: '#8B1A1A',
+                textDecoration: 'none',
+                fontWeight: 500,
+                marginBottom: '0.5rem'
+              }}
+            >
+              Zaboravili ste lozinku?
+            </Link>
+          </div>
+
+          <p style={{ textAlign: 'center', fontSize: '0.8125rem', color: '#9E887A', marginTop: '1rem' }}>
             Nemate račun?{' '}
             <a href="/register" style={{ color: '#8B1A1A', textDecoration: 'none', fontWeight: 600 }}>Registrirajte se</a>
           </p>

@@ -4,12 +4,17 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/ap
 
 export async function GET(request: NextRequest) {
   try {
+    const tokenFromCookie = request.cookies.get('token')?.value;
+    const authHeader = tokenFromCookie
+      ? `Bearer ${tokenFromCookie}`
+      : request.headers.get('Authorization') || '';
+
     // Forward request to backend with Authorization header
     const response = await fetch(`${BACKEND_URL}/auth/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': request.headers.get('Authorization') || '',
+        'Authorization': authHeader,
       },
     });
 

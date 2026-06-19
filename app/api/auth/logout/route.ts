@@ -4,16 +4,21 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/ap
 
 export async function POST(request: NextRequest) {
   try {
+    const tokenFromCookie = request.cookies.get('token')?.value;
+    const authHeader = tokenFromCookie
+      ? `Bearer ${tokenFromCookie}`
+      : request.headers.get('Authorization') || '';
+
     // Forward logout request to backend
-    const response = await fetch(`${BACKEND_URL}/auth/logout`, {
+    await fetch(`${BACKEND_URL}/auth/logout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': request.headers.get('Authorization') || '',
+        'Authorization': authHeader,
       },
     });
 
-    // Create response to clear cookies on client side
+    // Always clear client cookies regardless of backend response
     const nextResponse = NextResponse.json(
       { message: 'Logged out successfully' },
       { status: 200 }
