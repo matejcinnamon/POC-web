@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
+    // 206 = credentials valid but 2FA token required
+    if (response.status === 206) {
+      return NextResponse.json({ requiresTwoFactor: true }, { status: 206 });
+    }
+
     if (!response.ok) {
       return createErrorResponse(data.message || 'Login failed', response.status);
     }
