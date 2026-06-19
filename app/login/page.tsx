@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
-import api, { storeAuthTokens } from '../lib/api';
+import { login } from '../lib/api';
 
 export default function Login() {
   const router = useRouter();
@@ -13,9 +12,16 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (Cookies.get('token')) {
-      router.replace('/dashboard');
-    }
+    // Check if user is already authenticated by calling /api/auth/me
+    const checkAuth = async () => {
+      try {
+        await fetch('/api/auth/me');
+        router.replace('/dashboard');
+      } catch {
+        // Not authenticated, stay on login page
+      }
+    };
+    checkAuth();
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,9 +30,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await api.post('/auth/login', { email, password });
-      const { token, refreshToken, refreshTokenId } = response.data;
-      storeAuthTokens(token, refreshToken, refreshTokenId);
+      await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Prijava neuspješna. Provjerite email i lozinku.');

@@ -1,44 +1,40 @@
 import axios from 'axios';
-import Cookies from 'js-cookie';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// SECURITY: httpOnly cannot be set from JavaScript — it must be set server-side.
-// These tokens are therefore readable by any XSS payload.
-// TODO: For production, proxy auth via a Next.js API route (e.g. /api/auth/*) that
-// sets cookies with httpOnly=true; Secure; SameSite=Strict from the server response.
-const COOKIE_OPTS: Cookies.CookieAttributes = {
-  expires: 7,
-  sameSite: 'strict',
-  // httpOnly: true, // REMOVED - cannot be set from JS, must be set by server
-  secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
-};
-
-export function storeAuthTokens(token: string, refreshToken: string, refreshTokenId: string) {
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  Cookies.set('token', token, { ...COOKIE_OPTS, secure });
-  Cookies.set('refreshToken', refreshToken, { ...COOKIE_OPTS, secure });
-  Cookies.set('refreshTokenId', refreshTokenId, { ...COOKIE_OPTS, secure });
-}
-
-export function clearAuthTokens() {
-  Cookies.remove('token');
-  Cookies.remove('refreshToken');
-  Cookies.remove('refreshTokenId');
-}
+// Note: Tokens are now stored as httpOnly cookies by the server
+// No client-side token storage for security
 
 const api = axios.create({
   baseURL: API_URL,
 });
 
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Authentication helper functions
+export async function login(email: string, password: string) {
+  const response = await axios.post('/api/auth/login', { email, password });
+  return response.data;
+}
 
+export async function register(email: string, password: string) {
+  const response = await axios.post('/api/auth/register', { email, password });
+  return response.data;
+}
+
+export async function logout() {
+  await axios.post('/api/auth/logout');
+}
+
+export async function getCurrentUser() {
+  const response = await axios.get('/api/auth/me');
+  return response.data;
+}
+
+export async function disconnectGmail() {
+  const response = await axios.delete('/api/gmail/disconnect');
+  return response.data;
+}
+
+// For non-auth API calls, we need to handle token refresh
 let isRefreshing = false;
 let refreshSubscribers: Array<(token: string) => void> = [];
 
@@ -51,6 +47,13 @@ function notifyRefreshSubscribers(token: string) {
   refreshSubscribers = [];
 }
 
+api.interceptors.request.use((config) => {
+  // For non-auth endpoints, we still need to handle Authorization header
+  // The token will be sent automatically by browser for same-origin requests
+  // with httpOnly cookies
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -58,15 +61,6 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-
-      const refreshToken = Cookies.get('refreshToken');
-      const refreshTokenId = Cookies.get('refreshTokenId');
-
-      if (!refreshToken || !refreshTokenId) {
-        clearAuthTokens();
-        if (typeof window !== 'undefined') window.location.href = '/login';
-        return Promise.reject(error);
-      }
 
       if (isRefreshing) {
         return new Promise((resolve) => {
@@ -79,15 +73,12 @@ api.interceptors.response.use(
 
       isRefreshing = true;
       try {
-        const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken, refreshTokenId });
-        const { token, refreshToken: newRefreshToken, refreshTokenId: newRefreshTokenId } = res.data;
-        storeAuthTokens(token, newRefreshToken, newRefreshTokenId);
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        notifyRefreshSubscribers(token);
-        originalRequest.headers.Authorization = `Bearer ${token}`;
+        const res = await axios.post('/api/auth/refresh');
+        // Tokens are now httpOnly cookies, no need to store them
+        notifyRefreshSubscribers('token-refreshed');
+        originalRequest.headers.Authorization = `Bearer token-refreshed`;
         return api(originalRequest);
       } catch {
-        clearAuthTokens();
         if (typeof window !== 'undefined') window.location.href = '/login';
         return Promise.reject(error);
       } finally {
@@ -98,5 +89,10 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export function clearAuthTokens() {
+  // No-op - tokens are now httpOnly cookies handled by server
+  // This function remains for backward compatibility
+}
 
 export default api;

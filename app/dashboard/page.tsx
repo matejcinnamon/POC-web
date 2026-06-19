@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
-import { clearAuthTokens } from '../lib/api';
+import { logout, disconnectGmail } from '../lib/api';
 
 const menuItems = [
   {
@@ -64,17 +63,48 @@ const menuItems = [
 
 export default function Dashboard() {
   const router = useRouter();
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   useEffect(() => {
-    const token = Cookies.get('token');
-    if (!token) {
-      router.push('/login');
-    }
+    // Check authentication and Gmail connection
+    const checkAuthAndGmail = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        const data = await response.json();
+        setGmailConnected(data.hasGmail || false);
+      } catch {
+        router.push('/login');
+      }
+    };
+    checkAuthAndGmail();
   }, [router]);
 
-  const handleLogout = () => {
-    clearAuthTokens();
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login');
+    } catch (error) {
+      // Even if logout fails, redirect to login
+      router.push('/login');
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    if (!confirm('Are you sure you want to disconnect Gmail? This will revoke access and stop fetching invoices.')) {
+      return;
+    }
+
+    setIsDisconnecting(true);
+    try {
+      await disconnectGmail();
+      setGmailConnected(false);
+      alert('Gmail disconnected successfully');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to disconnect Gmail');
+    } finally {
+      setIsDisconnecting(false);
+    }
   };
 
   return (
@@ -87,12 +117,33 @@ export default function Dashboard() {
           <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#8B1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📄</div>
           <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#2C1810', margin: 0 }}>Utility Bills</span>
         </div>
-        <button
-          onClick={handleLogout}
-          style={{ padding: '0.5rem 1rem', background: 'rgba(139,26,26,0.08)', border: '1px solid rgba(139,26,26,0.2)', borderRadius: '8px', color: '#8B1A1A', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
-        >
-          Odjava
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {gmailConnected && (
+            <button
+              onClick={handleDisconnectGmail}
+              disabled={isDisconnecting}
+              style={{ 
+                padding: '0.5rem 1rem', 
+                background: isDisconnecting ? 'rgba(122,98,85,0.08)' : 'rgba(122,98,85,0.08)', 
+                border: '1px solid rgba(122,98,85,0.2)', 
+                borderRadius: '8px', 
+                color: '#7A6255', 
+                fontSize: '0.875rem', 
+                fontWeight: 600, 
+                cursor: isDisconnecting ? 'not-allowed' : 'pointer',
+                opacity: isDisconnecting ? 0.6 : 1
+              }}
+            >
+              {isDisconnecting ? 'Prekidanje...' : 'Prekini Gmail'}
+            </button>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{ padding: '0.5rem 1rem', background: 'rgba(139,26,26,0.08)', border: '1px solid rgba(139,26,26,0.2)', borderRadius: '8px', color: '#8B1A1A', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Odjava
+          </button>
+        </div>
       </nav>
 
       {/* Main */}
