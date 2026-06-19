@@ -15,8 +15,14 @@ export default function Register() {
     // Check if user is already authenticated by calling /api/auth/me
     const checkAuth = async () => {
       try {
-        await fetch('/api/auth/me');
-        router.replace('/dashboard');
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          // Validate that we have proper user data
+          if (data && data.userId && data.email) {
+            router.replace('/dashboard');
+          }
+        }
       } catch {
         // Not authenticated, stay on register page
       }
@@ -33,7 +39,9 @@ export default function Register() {
       await register(email, password);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registracija neuspješna. Email možda već postoji.');
+      // Handle both axios errors and general errors
+      const errorMessage = err.response?.data?.message || err.message || 'Registracija neuspješna. Email možda već postoji.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

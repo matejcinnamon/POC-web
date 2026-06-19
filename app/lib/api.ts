@@ -5,25 +5,32 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
+  withCredentials: true, // Ensure cookies are sent with requests
 });
 
 // Authentication helper functions
 export async function login(email: string, password: string) {
-  const response = await axios.post('/api/auth/login', { email, password });
+  const response = await axios.post('/api/auth/login', { email, password }, { withCredentials: true });
   return response.data;
 }
 
 export async function register(email: string, password: string) {
-  const response = await axios.post('/api/auth/register', { email, password });
+  const response = await axios.post('/api/auth/register', { email, password }, { withCredentials: true });
   return response.data;
 }
 
 export async function logout() {
-  await axios.post('/api/auth/logout');
+  await axios.post('/api/auth/logout', {}, { withCredentials: true });
 }
 
 export async function getCurrentUser() {
-  const response = await axios.get('/api/auth/me');
+  const response = await axios.get('/api/auth/me', { withCredentials: true });
+  
+  // Validate that we have proper user data
+  if (!response.data || !response.data.userId || !response.data.email) {
+    throw new Error('Invalid authentication state');
+  }
+  
   return response.data;
 }
 
@@ -39,48 +46,47 @@ export async function resetPassword(token: string, newPassword: string) {
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {
-  const response = await axios.post('/api/auth/change-password', { currentPassword, newPassword });
+  const response = await axios.post('/api/auth/change-password', { currentPassword, newPassword }, { withCredentials: true });
   return response.data;
 }
 
 // 2FA functions
 export async function setupTwoFactor() {
-  const response = await axios.post('/api/auth/2fa/setup');
+  const response = await axios.post('/api/auth/2fa/setup', {}, { withCredentials: true });
   return response.data;
 }
 
 export async function enableTwoFactor(token: string) {
-  const response = await axios.post('/api/auth/2fa/enable', { token });
+  const response = await axios.post('/api/auth/2fa/enable', { token }, { withCredentials: true });
   return response.data;
 }
 
 export async function disableTwoFactor(token: string) {
-  const response = await axios.post('/api/auth/2fa/disable', { token });
+  const response = await axios.post('/api/auth/2fa/disable', { token }, { withCredentials: true });
   return response.data;
 }
 
 export async function disconnectGmail() {
-  const response = await axios.delete('/api/gmail/disconnect');
+  const response = await axios.delete('/api/gmail/disconnect', { withCredentials: true });
   return response.data;
 }
 
-// For non-auth API calls, we need to handle token refresh
+// Improved token refresh mechanism with proper race condition handling
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<(success: boolean) => void> = [];
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
+function subscribeTokenRefresh(cb: (success: boolean) => void) {
   refreshSubscribers.push(cb);
 }
 
-function notifyRefreshSubscribers(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+function notifyRefreshSubscribers(success: boolean) {
+  refreshSubscribers.forEach((cb) => cb(success));
   refreshSubscribers = [];
 }
 
 api.interceptors.request.use((config) => {
-  // For non-auth endpoints, we still need to handle Authorization header
-  // The token will be sent automatically by browser for same-origin requests
-  // with httpOnly cookies
+  // Ensure credentials are included for all requests
+  config.withCredentials = true;
   return config;
 });
 
@@ -93,24 +99,32 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh(() => {
-            delete originalRequest.headers.Authorization;
-            resolve(api(originalRequest));
+        // Wait for the current refresh to complete
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((success) => {
+            if (success) {
+              resolve(api(originalRequest));
+            } else {
+              reject(error);
+            }
           });
         });
       }
 
       isRefreshing = true;
       try {
-        await axios.post('/api/auth/refresh');
+        await axios.post('/api/auth/refresh', {}, { withCredentials: true });
         // Tokens are httpOnly cookies — browser sends them automatically
-        notifyRefreshSubscribers('');
-        delete originalRequest.headers.Authorization;
+        notifyRefreshSubscribers(true);
         return api(originalRequest);
-      } catch {
-        if (typeof window !== 'undefined') window.location.href = '/login';
-        return Promise.reject(error);
+      } catch (refreshError) {
+        // Refresh failed, notify all waiting requests
+        notifyRefreshSubscribers(false);
+        // Redirect to login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }

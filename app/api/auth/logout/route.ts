@@ -1,60 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { 
+  forwardRequest, 
+  createSuccessResponse, 
+  createErrorResponse, 
+  clearAuthCookies,
+  getAuthHeader 
+} from '../../lib/api-proxy';
 
 export async function POST(request: NextRequest) {
   try {
-    const tokenFromCookie = request.cookies.get('token')?.value;
-    const authHeader = tokenFromCookie
-      ? `Bearer ${tokenFromCookie}`
-      : request.headers.get('Authorization') || '';
+    const authHeader = getAuthHeader(request);
 
-    // Forward logout request to backend
-    await fetch(`${BACKEND_URL}/auth/logout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      },
-    });
+    // Forward logout request to backend (but don't fail if backend is unavailable)
+    try {
+      await forwardRequest('/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+        },
+        includeAuth: true,
+      });
+    } catch (backendError) {
+      // Log backend error but continue with logout
+      console.warn('Backend logout failed:', backendError);
+    }
 
     // Always clear client cookies regardless of backend response
-    const nextResponse = NextResponse.json(
-      { message: 'Logged out successfully' },
-      { status: 200 }
-    );
-
-    // Clear auth cookies
-    nextResponse.cookies.set('token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      path: '/',
-    });
-
-    nextResponse.cookies.set('refreshToken', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      path: '/',
-    });
-
-    nextResponse.cookies.set('refreshTokenId', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      path: '/',
-    });
+    const nextResponse = createSuccessResponse({ message: 'Logged out successfully' }, 200);
+    clearAuthCookies(nextResponse);
 
     return nextResponse;
   } catch (error) {
-    console.error('Logout proxy error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return createErrorResponse('Failed to process logout request');
   }
 }

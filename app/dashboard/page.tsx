@@ -70,9 +70,18 @@ export default function Dashboard() {
     // Check authentication and Gmail connection
     const checkAuthAndGmail = async () => {
       try {
-        const response = await fetch('/api/auth/me');
-        const data = await response.json();
-        setGmailConnected(data.hasGmail || false);
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        if (response.ok) {
+          const data = await response.json();
+          // Validate that we have proper user data
+          if (data && data.userId && data.email) {
+            setGmailConnected(data.hasGmail || false);
+          } else {
+            router.push('/login');
+          }
+        } else {
+          router.push('/login');
+        }
       } catch {
         router.push('/login');
       }

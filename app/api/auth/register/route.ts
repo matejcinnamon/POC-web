@@ -1,45 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { 
+  forwardRequest, 
+  createSuccessResponse, 
+  createErrorResponse, 
+  copyCookies,
+  validateAuthBody 
+} from '../../lib/api-proxy';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Forward registration request to backend
-    const response = await fetch(`${BACKEND_URL}/auth/register`, {
+    // Validate request body
+    const validation = validateAuthBody(body, ['email', 'password']);
+    if (!validation.valid) {
+      return createErrorResponse(validation.error!, 400);
+    }
+    
+    const { response, data } = await forwardRequest('/auth/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
+      return createErrorResponse(data.message || 'Registration failed', response.status);
     }
 
-    // Create response with user data (tokens will be set as httpOnly cookies by backend)
-    const nextResponse = NextResponse.json({
+    // Create response with user data (standardized to 200 status)
+    const nextResponse = createSuccessResponse({
       userId: data.userId,
       email: data.email,
       message: 'Registration successful'
-    }, { status: 201 });
+    }, 200);
 
-    // Copy httpOnly cookies from backend response to Next.js response
-    const cookies = response.headers.getSetCookie();
-    cookies.forEach(cookie => {
-      nextResponse.headers.append('Set-Cookie', cookie);
-    });
+    // Copy httpOnly cookies from backend response
+    copyCookies(response, nextResponse);
 
     return nextResponse;
   } catch (error) {
-    console.error('Register proxy error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return createErrorResponse('Failed to connect to authentication service');
   }
 }

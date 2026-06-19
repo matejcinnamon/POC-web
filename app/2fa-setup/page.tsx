@@ -20,7 +20,9 @@ export default function TwoFactorSetup() {
         setQrCode(data.qrCodeDataURL);
         setSecret(data.secret);
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to setup 2FA');
+        // Handle both axios errors and general errors
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to setup 2FA';
+        setError(errorMessage);
       }
     };
     setup();
@@ -39,7 +41,9 @@ export default function TwoFactorSetup() {
         router.push('/dashboard');
       }, 2000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to enable 2FA');
+      // Handle both axios errors and general errors
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to enable 2FA';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

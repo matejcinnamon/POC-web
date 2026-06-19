@@ -16,9 +16,13 @@ export default function Login() {
     // Check if user is already authenticated by calling /api/auth/me
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
         if (res.ok) {
-          router.replace('/dashboard');
+          const data = await res.json();
+          // Validate that we have proper user data
+          if (data && data.userId && data.email) {
+            router.replace('/dashboard');
+          }
         }
       } catch {
         // Not authenticated, stay on login page
@@ -36,7 +40,9 @@ export default function Login() {
       await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Prijava neuspješna. Provjerite email i lozinku.');
+      // Handle both axios errors and general errors
+      const errorMessage = err.response?.data?.message || err.message || 'Prijava neuspješna. Provjerite email i lozinku.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

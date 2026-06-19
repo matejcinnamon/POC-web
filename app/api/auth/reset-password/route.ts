@@ -1,32 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { 
+  forwardRequest, 
+  createSuccessResponse, 
+  createErrorResponse,
+  validateAuthBody 
+} from '../../../lib/api-proxy';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Forward password reset request to backend
-    const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
+    // Validate request body
+    const validation = validateAuthBody(body, ['token', 'newPassword']);
+    if (!validation.valid) {
+      return createErrorResponse(validation.error!, 400);
+    }
+    
+    const { response, data } = await forwardRequest('/auth/reset-password', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
+      return createErrorResponse(data.message || 'Failed to reset password', response.status);
     }
 
-    return NextResponse.json(data, { status: 200 });
+    return createSuccessResponse(data, 200);
   } catch (error) {
-    console.error('Password reset proxy error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return createErrorResponse('Failed to connect to authentication service');
   }
 }

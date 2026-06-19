@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { 
+  forwardRequest, 
+  createSuccessResponse, 
+  createErrorResponse, 
+  copyCookies 
+} from '../../lib/api-proxy';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,40 +21,27 @@ export async function POST(request: NextRequest) {
       body = await request.json();
     }
     
-    // Forward refresh request to backend
-    const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+    const { response, data } = await forwardRequest('/auth/refresh', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
+      return createErrorResponse(data.message || 'Token refresh failed', response.status);
     }
 
     // Create response with user data
-    const nextResponse = NextResponse.json({
+    const nextResponse = createSuccessResponse({
       userId: data.userId,
       email: data.email,
       message: 'Token refreshed successfully'
-    }, { status: 200 });
+    }, 200);
 
     // Copy updated httpOnly cookies from backend response
-    const cookies = response.headers.getSetCookie();
-    cookies.forEach(cookie => {
-      nextResponse.headers.append('Set-Cookie', cookie);
-    });
+    copyCookies(response, nextResponse);
 
     return nextResponse;
   } catch (error) {
-    console.error('Refresh proxy error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return createErrorResponse('Failed to refresh authentication token');
   }
 }
