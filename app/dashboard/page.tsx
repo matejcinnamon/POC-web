@@ -55,9 +55,9 @@ const menuItems = [
     icon: '👤',
     title: 'Profil i sigurnost',
     description: 'Upravljanje računom i lozinkom',
-    href: null,
-    enabled: false,
-    accent: '#7A6255',
+    href: '/settings',
+    enabled: true,
+    accent: '#8B1A1A',
   },
 ];
 
