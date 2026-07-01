@@ -29,7 +29,20 @@ export function clearAuthTokens() {
 
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true, // Send cookies (e.g., gmail_session_id) with cross-origin requests
 });
+
+export async function logout() {
+  const token = Cookies.get('token');
+  if (token) {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Even if the backend call fails, clear local tokens below.
+    }
+  }
+  clearAuthTokens();
+}
 
 api.interceptors.request.use((config) => {
   const token = Cookies.get('token');

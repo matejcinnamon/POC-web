@@ -27,7 +27,7 @@ export default function Login() {
       const response = await api.post('/auth/login', { email, password });
       const { token, refreshToken, refreshTokenId } = response.data;
       storeAuthTokens(token, refreshToken, refreshTokenId);
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.response?.data?.message || 'Prijava neuspješna. Provjerite email i lozinku.');
     } finally {

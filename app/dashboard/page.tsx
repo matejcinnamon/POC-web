@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import { clearAuthTokens } from '../lib/api';
+import { logout } from '../lib/api';
 
 const menuItems = [
   {
@@ -72,8 +72,8 @@ export default function Dashboard() {
     }
   }, [router]);
 
-  const handleLogout = () => {
-    clearAuthTokens();
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 

@@ -27,7 +27,7 @@ export default function Register() {
       const response = await api.post('/auth/register', { email, password });
       const { token, refreshToken, refreshTokenId } = response.data;
       storeAuthTokens(token, refreshToken, refreshTokenId);
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registracija neuspješna. Email možda već postoji.');
     } finally {

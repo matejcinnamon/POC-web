@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import api, { clearAuthTokens } from '../../lib/api';
+import api, { logout, clearAuthTokens } from '../../lib/api';
 import PaymentBarcode from '../../components/PaymentBarcode';
 
 interface Invoice {
@@ -166,8 +166,8 @@ export default function Invoices() {
     }
   };
 
-  const handleLogout = () => {
-    clearAuthTokens();
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 
