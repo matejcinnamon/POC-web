@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import api, { logout, clearAuthTokens } from '../../lib/api';
+import api, { logout, clearAuthTokens, storeGmailSession, clearGmailSession } from '../../lib/api';
 import PaymentBarcode from '../../components/PaymentBarcode';
 
 interface Invoice {
@@ -105,6 +105,8 @@ export default function Invoices() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('gmail') === 'connected') {
       setError('');
+      const sid = urlParams.get('sid');
+      if (sid) storeGmailSession(sid);
       checkGmailConnection();
       window.history.replaceState({}, '', window.location.pathname);
     } else if (urlParams.get('gmail') === 'error') {
@@ -155,6 +157,7 @@ export default function Invoices() {
     setFetchResult(null);
     try {
       await api.post('/gmail/revoke');
+      clearGmailSession();
       setGmailConnected(false);
       setFetchResult({ fetchedCount: 0, skippedCached: 0, totalScanned: 0, method: 'revoke', daysBack: 0 });
       if (fetchResultTimerRef.current) clearTimeout(fetchResultTimerRef.current);
@@ -167,6 +170,7 @@ export default function Invoices() {
   };
 
   const handleLogout = async () => {
+    clearGmailSession();
     await logout();
     router.push('/login');
   };

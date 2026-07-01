@@ -27,6 +27,19 @@ export function clearAuthTokens() {
   Cookies.remove('refreshTokenId');
 }
 
+export function storeGmailSession(sid: string) {
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  Cookies.set('gmail_session_id', sid, { expires: 30, sameSite: 'strict', secure });
+}
+
+export function clearGmailSession() {
+  Cookies.remove('gmail_session_id');
+}
+
+export function getGmailSession(): string | undefined {
+  return Cookies.get('gmail_session_id');
+}
+
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // Send cookies (e.g., gmail_session_id) with cross-origin requests
@@ -48,6 +61,10 @@ api.interceptors.request.use((config) => {
   const token = Cookies.get('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const gmailSession = Cookies.get('gmail_session_id');
+  if (gmailSession) {
+    config.headers['X-Gmail-Session'] = gmailSession;
   }
   return config;
 });
