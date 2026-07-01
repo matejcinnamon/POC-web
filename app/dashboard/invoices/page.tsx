@@ -33,6 +33,7 @@ export default function Invoices() {
   const [fetchResult, setFetchResult] = useState<{ fetchedCount: number; skippedCached: number; totalScanned: number; method?: string; daysBack?: number } | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailChecking, setGmailChecking] = useState(true);
+  const [revokingGmail, setRevokingGmail] = useState(false);
   const [ignoringBill, setIgnoringBill] = useState(false);
   const [unignoringBill, setUnignoringBill] = useState(false);
   const [blockingVendor, setBlockingVendor] = useState(false);
@@ -142,6 +143,26 @@ export default function Invoices() {
       window.location.href = response.data.authUrl;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Greška pri povezivanju Gmaila');
+    }
+  };
+
+  const revokeGmail = async () => {
+    if (!window.confirm('Opozvati pristup Gmailu? Aplikacija više neće moći dohvaćati račune iz vaše pošte.')) {
+      return;
+    }
+    setRevokingGmail(true);
+    setError('');
+    setFetchResult(null);
+    try {
+      await api.post('/gmail/revoke');
+      setGmailConnected(false);
+      setFetchResult({ fetchedCount: 0, skippedCached: 0, totalScanned: 0, method: 'revoke', daysBack: 0 });
+      if (fetchResultTimerRef.current) clearTimeout(fetchResultTimerRef.current);
+      fetchResultTimerRef.current = setTimeout(() => setFetchResult(null), 5000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Greška pri opozivanju pristupa Gmailu');
+    } finally {
+      setRevokingGmail(false);
     }
   };
 
@@ -290,6 +311,7 @@ export default function Invoices() {
     btnPrimary: { padding: '0.5rem 1rem', background: '#8B1A1A', border: 'none', borderRadius: '8px', color: '#F5F0E8', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' } as React.CSSProperties,
     btnGmail: { padding: '0.5rem 1rem', background: '#8B1A1A', border: 'none', borderRadius: '8px', color: '#F5F0E8', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' } as React.CSSProperties,
     btnConnect: { padding: '0.5rem 1rem', background: 'rgba(139,26,26,0.08)', border: '1px solid rgba(139,26,26,0.3)', borderRadius: '8px', color: '#8B1A1A', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
+    btnRevoke: { padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #C9BFB0', borderRadius: '8px', color: '#7A6255', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' } as React.CSSProperties,
     btnLogout: { padding: '0.5rem 1rem', background: 'rgba(139,26,26,0.08)', border: '1px solid rgba(139,26,26,0.2)', borderRadius: '8px', color: '#8B1A1A', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
     btnBack: { padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #C9BFB0', borderRadius: '8px', color: '#7A6255', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' } as React.CSSProperties,
     main: { maxWidth: '900px', margin: '0 auto', padding: '2rem 1.5rem' },
@@ -382,7 +404,7 @@ export default function Invoices() {
                 <button
                   key={d}
                   onClick={() => setDaysBack(d)}
-                  disabled={fetching}
+                  disabled={fetching || revokingGmail}
                   style={{
                     padding: '0.35rem 0.625rem',
                     background: daysBack === d ? 'rgba(139,26,26,0.15)' : 'transparent',
@@ -398,9 +420,12 @@ export default function Invoices() {
                   {d === 7 ? '1 tjedan' : d === 14 ? '2 tjedna' : '1 mj.'}
                 </button>
               ))}
-              <button onClick={fetchFromGmail} disabled={fetching} style={{ ...S.btnGmail, opacity: fetching ? 0.6 : 1 }}>
+              <button onClick={fetchFromGmail} disabled={fetching || revokingGmail} style={{ ...S.btnGmail, opacity: fetching || revokingGmail ? 0.6 : 1 }}>
                 {fetching && <span style={S.spinner('#fff')} />}
                 {fetching ? 'Dohvaćanje...' : '↓ Dohvati'}
+              </button>
+              <button onClick={revokeGmail} disabled={revokingGmail} style={{ ...S.btnRevoke, opacity: revokingGmail ? 0.6 : 1 }}>
+                {revokingGmail ? 'Odspajanje...' : '✕ Odspoji Gmail'}
               </button>
             </div>
           )}
@@ -436,12 +461,14 @@ export default function Invoices() {
         )}
         {fetchResult && !fetching && (
           <div style={S.alertSuccess}>
-            {fetchResult.fetchedCount > 0 ? (
+            {fetchResult.method === 'revoke' ? (
+              <>Gmail pristup je uspješno opozvan. Možete ponovno povezati račun kad god želite.</>
+            ) : fetchResult.fetchedCount > 0 ? (
               <>Pronađeno <strong>{fetchResult.fetchedCount} novih računa</strong> od {fetchResult.totalScanned} pregledanih e-mailova (zadnjih {fetchResult.daysBack} dana).</>
             ) : (
               <>Pregledano {fetchResult.totalScanned} e-mailova (zadnjih {fetchResult.daysBack} dana). Nema novih računa.</>
             )}
-            {fetchResult.skippedCached > 0 && <> ({fetchResult.skippedCached} već obrađeno)</>}
+            {fetchResult.method !== 'revoke' && fetchResult.skippedCached > 0 && <> ({fetchResult.skippedCached} već obrađeno)</>}
           </div>
         )}
 
